@@ -1,0 +1,54 @@
+nodes:
+- id: gateway
+  path: ${FORGE_RUNTIME_BIN}/gateway
+  args: --config gateway.yaml
+  inputs:
+    tick: dora/timer/millis/50
+    proprio_state: g1d/state
+    head: g1d/head
+    left_wrist: g1d/left_wrist
+    right_wrist: g1d/right_wrist
+    state_tool_in:
+      source: g1d/state_tool_out
+      queue_size: 256
+    camera_tool_in:
+      source: g1d/camera_tool_out
+      queue_size: 256
+    observe_tool_in:
+      source: g1d/observe_tool_out
+      queue_size: 256
+    lift_tool_in:
+      source: g1d/lift_tool_out
+      queue_size: 256
+  outputs:
+  - tool_response
+  - state_tool_out
+  - camera_tool_out
+  - observe_tool_out
+  - lift_tool_out
+- id: g1d
+  path: ${FORGE_RUNTIME_BIN}/g1d_node
+  args: --backend mock --cameras ${PAOS_SKILL_ROOT}/assets/cameras.yaml --allow-height
+  inputs:
+    tick: dora/timer/millis/50
+    state_tool_in:
+      source: gateway/state_tool_out
+      queue_size: 256
+    camera_tool_in:
+      source: gateway/camera_tool_out
+      queue_size: 256
+    observe_tool_in:
+      source: gateway/observe_tool_out
+      queue_size: 256
+    lift_tool_in:
+      source: gateway/lift_tool_out
+      queue_size: 256
+  outputs:
+  - state
+  - head
+  - left_wrist
+  - right_wrist
+  - state_tool_out
+  - camera_tool_out
+  - observe_tool_out
+  - lift_tool_out

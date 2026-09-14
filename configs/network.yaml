@@ -1,0 +1,17 @@
+# 2026-09-07 核对的电脑 USB Ethernet 配置。
+# 修改本文件不会修改系统网卡；构建时核对它与 device.yaml 的网卡名称是否一致。
+interface: "enx9c69d36fbc0b"
+connection_name: "有线连接 1"
+connection_uuid: "6c75cd12-99e7-3b8e-ae08-656666c97c0a"
+ipv4_method: "manual"
+computer_ip: "192.168.123.99"
+prefix_length: 24
+subnet_mask: "255.255.255.0"
+gateway: null
+dns: []
+autoconnect: true
+never_default: true
+
+# 已验证可达的地址；不能仅凭 ping 认定其具体控制职责。
+ping_verified_ip: "192.168.123.161"
+image_server_ip: "192.168.123.164"

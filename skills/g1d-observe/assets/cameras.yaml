@@ -1,0 +1,38 @@
+# 实机配置读取日期：2026-09-07。此文件记录参数，不会自动启动服务。
+# 2026-09-10 按实机位置修正：60003/55557 为左腕，60002/55556 为右腕。
+robot_ip: "192.168.123.164"
+service: "teleimager"
+config_port: 60000
+
+head:
+  web_port: 60001
+  stream_port: 55555
+  web_url: "https://192.168.123.164:60001/"
+  stream_url: "tcp://192.168.123.164:55555"
+  binocular: true
+  width: 1280
+  height: 480
+  fps: 30
+
+left_wrist:
+  web_port: 60003
+  stream_port: 55557
+  web_url: "https://192.168.123.164:60003/"
+  stream_url: "tcp://192.168.123.164:55557"
+  binocular: false
+  width: 640
+  height: 480
+  fps: 30
+
+right_wrist:
+  web_port: 60002
+  stream_port: 55556
+  web_url: "https://192.168.123.164:60002/"
+  stream_url: "tcp://192.168.123.164:55556"
+  binocular: false
+  width: 640
+  height: 480
+  fps: 30
+
+# stream_port 是 ZeroMQ JPEG 发布端口，不是 HTTP 视频地址。
+# fps 为服务端配置值，并非实测帧率。

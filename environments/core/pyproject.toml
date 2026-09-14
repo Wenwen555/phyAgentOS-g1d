@@ -1,0 +1,12 @@
+[project]
+name = "paos-g1d-core-environment"
+version = "0.1.0"
+description = "Isolated PhyAgentOS Core runtime for the local G1-D integration"
+requires-python = ">=3.12,<3.13"
+dependencies = ["PhyAgentOS-ai==1.0.0"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+PhyAgentOS-ai = { path = "../../../PhyAgentOS-core", editable = true }

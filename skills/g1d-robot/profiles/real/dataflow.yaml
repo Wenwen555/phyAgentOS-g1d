@@ -1,0 +1,87 @@
+nodes:
+- id: gateway
+  path: ${FORGE_RUNTIME_BIN}/gateway
+  args: --config gateway.yaml
+  inputs:
+    tick: dora/timer/millis/50
+    proprio_state: g1d/state
+    head: g1d/head
+    left_wrist: g1d/left_wrist
+    right_wrist: g1d/right_wrist
+    state_tool_in:
+      source: g1d/state_tool_out
+      queue_size: 256
+    camera_tool_in:
+      source: g1d/camera_tool_out
+      queue_size: 256
+    observe_tool_in:
+      source: g1d/observe_tool_out
+      queue_size: 256
+    perception_state_tool_in:
+      source: g1d/perception_state_tool_out
+      queue_size: 256
+    perception_session_tool_in:
+      source: g1d/perception_session_tool_out
+      queue_size: 256
+    arm_state_tool_in:
+      source: g1d/arm_state_tool_out
+      queue_size: 256
+    arm_tool_in:
+      source: g1d/arm_tool_out
+      queue_size: 256
+    grasp_tool_in:
+      source: g1d/grasp_tool_out
+      queue_size: 256
+  outputs:
+  - tool_response
+  - state_tool_out
+  - camera_tool_out
+  - observe_tool_out
+  - perception_state_tool_out
+  - perception_session_tool_out
+  - arm_state_tool_out
+  - arm_tool_out
+  - grasp_tool_out
+- id: g1d
+  path: ${FORGE_RUNTIME_BIN}/g1d_node
+  args: --backend unitree --device device.yaml --sdk-library ${PAOS_SKILL_ROOT}/assets/native/libg1d_sdk.so
+    --cameras ${PAOS_SKILL_ROOT}/assets/cameras.yaml --allow-arm --allow-perception
+  inputs:
+    tick: dora/timer/millis/50
+    state_tool_in:
+      source: gateway/state_tool_out
+      queue_size: 256
+    camera_tool_in:
+      source: gateway/camera_tool_out
+      queue_size: 256
+    observe_tool_in:
+      source: gateway/observe_tool_out
+      queue_size: 256
+    perception_state_tool_in:
+      source: gateway/perception_state_tool_out
+      queue_size: 256
+    perception_session_tool_in:
+      source: gateway/perception_session_tool_out
+      queue_size: 256
+    arm_state_tool_in:
+      source: gateway/arm_state_tool_out
+      queue_size: 256
+    arm_tool_in:
+      source: gateway/arm_tool_out
+      queue_size: 256
+    grasp_tool_in:
+      source: gateway/grasp_tool_out
+      queue_size: 256
+  outputs:
+  - state
+  - head
+  - left_wrist
+  - right_wrist
+  - state_tool_out
+  - camera_tool_out
+  - observe_tool_out
+  - perception_state_tool_out
+  - perception_session_tool_out
+  - arm_state_tool_out
+  - arm_tool_out
+  - grasp_tool_out

@@ -1,0 +1,13 @@
+{
+  "agents": {
+    "defaults": {
+      "workspace": "/home/robot/project/dfx-inspire-service/unitree-g1d/PhyAgentOS-g1d/workspace",
+      "maxToolIterations": 120
+    }
+  },
+  "forge": {
+    "evidence": {
+      "requiredImageSources": ["head", "left_wrist", "right_wrist"]
+    }
+  }
+}

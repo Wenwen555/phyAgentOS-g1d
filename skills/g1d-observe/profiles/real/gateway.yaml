@@ -1,0 +1,551 @@
+host: 127.0.0.1
+port: 19002
+joint_order:
+- waist_yaw
+- waist_pitch
+- left_shoulder_pitch
+- left_shoulder_roll
+- left_shoulder_yaw
+- left_elbow
+- left_wrist_roll
+- left_wrist_pitch
+- left_wrist_yaw
+- right_shoulder_pitch
+- right_shoulder_roll
+- right_shoulder_yaw
+- right_elbow
+- right_wrist_roll
+- right_wrist_pitch
+- right_wrist_yaw
+- lift_column
+image_input_ids:
+- head
+- left_wrist
+- right_wrist
+state_broadcast_hz: 20
+image_broadcast_hz: 10
+readiness:
+  require_proprio_state: false
+  require_images: false
+agent:
+  enabled: false
+  action_manifests: []
+tools:
+  enabled: true
+  lease_ttl_ms: 3000
+  invoke_timeout_ms: 330000
+  request_input_id: tool_request
+  response_output_id: tool_response
+  specs:
+  - tool_id: g1d.state
+    implementation_id: unitree.g1d
+    endpoint_id: g1d.state
+    operation: get
+    semantics: query
+    description: Read fresh G1-D column height in metres and joint positions/velocities
+      in radians and rad/s. Optional joints=[...] returns only those axes; joints=[]
+      reads the column height alone, which is all a lift step needs.
+    input_schema:
+      additionalProperties: false
+      properties:
+        max_age_ms:
+          maximum: 1000
+          minimum: 1
+          title: Max Age Ms
+          type: integer
+        joints:
+          anyOf:
+          - items:
+              type: string
+            maxItems: 16
+            type: array
+          - type: 'null'
+          default: null
+          title: Joints
+      required:
+      - max_age_ms
+      title: StateRequest
+      type: object
+    output_schema:
+      additionalProperties: false
+      properties:
+        height_m:
+          title: Height M
+          type: number
+        height_sequence:
+          minimum: 1
+          title: Height Sequence
+          type: integer
+        height_age_ms:
+          minimum: 0
+          title: Height Age Ms
+          type: number
+        joint_names:
+          items:
+            type: string
+          title: Joint Names
+          type: array
+        positions_rad:
+          items:
+            type: number
+          title: Positions Rad
+          type: array
+        velocities_rad_s:
+          items:
+            type: number
+          title: Velocities Rad S
+          type: array
+        joint_sequence:
+          minimum: 1
+          title: Joint Sequence
+          type: integer
+        joint_age_ms:
+          minimum: 0
+          title: Joint Age Ms
+          type: number
+        mode_machine:
+          title: Mode Machine
+          type: integer
+        time_basis:
+          const: device_receive_monotonic
+          default: device_receive_monotonic
+          title: Time Basis
+          type: string
+        simulated:
+          title: Simulated
+          type: boolean
+      required:
+      - height_m
+      - height_sequence
+      - height_age_ms
+      - joint_names
+      - positions_rad
+      - velocities_rad_s
+      - joint_sequence
+      - joint_age_ms
+      - mode_machine
+      - simulated
+      title: StateOutput
+      type: object
+    readiness: []
+    robot_frame_profile:
+      robot_id: g1d
+      base_frame: column_origin
+      tool_frame: column
+      frames: {}
+  - tool_id: g1d.camera_snapshot
+    implementation_id: unitree.g1d
+    endpoint_id: g1d.cameras
+    operation: snapshot
+    semantics: query
+    description: 'Save a fresh camera JPEG on the Agent host; return image_path for
+      the native image tool. Head is one stereo pair: two 640x480 eyes side by side
+      in a 1280x480 frame.'
+    input_schema:
+      additionalProperties: false
+      properties:
+        source:
+          enum:
+          - head
+          - left_wrist
+          - right_wrist
+          title: Source
+          type: string
+        max_age_ms:
+          maximum: 1000
+          minimum: 1
+          title: Max Age Ms
+          type: integer
+      required:
+      - source
+      - max_age_ms
+      title: SnapshotRequest
+      type: object
+    output_schema:
+      additionalProperties: false
+      properties:
+        source:
+          enum:
+          - head
+          - left_wrist
+          - right_wrist
+          title: Source
+          type: string
+        image_path:
+          title: Image Path
+          type: string
+        sha256:
+          title: Sha256
+          type: string
+        sequence:
+          minimum: 1
+          title: Sequence
+          type: integer
+        age_ms:
+          minimum: 0
+          title: Age Ms
+          type: number
+        width:
+          exclusiveMinimum: 0
+          title: Width
+          type: integer
+        height:
+          exclusiveMinimum: 0
+          title: Height
+          type: integer
+        binocular:
+          title: Binocular
+          type: boolean
+        mean_brightness:
+          maximum: 255
+          minimum: 0
+          title: Mean Brightness
+          type: number
+        time_basis:
+          const: adapter_receive_monotonic
+          default: adapter_receive_monotonic
+          title: Time Basis
+          type: string
+        simulated:
+          title: Simulated
+          type: boolean
+      required:
+      - source
+      - image_path
+      - sha256
+      - sequence
+      - age_ms
+      - width
+      - height
+      - binocular
+      - mean_brightness
+      - simulated
+      title: SnapshotOutput
+      type: object
+    readiness: []
+    robot_frame_profile:
+      robot_id: g1d
+      base_frame: column_origin
+      tool_frame: column
+      frames: {}
+  - tool_id: g1d.observe
+    implementation_id: unitree.g1d
+    endpoint_id: g1d.observe
+    operation: get
+    semantics: query
+    description: 'Read-only observation bundle: requested camera JPEGs plus fresh
+      arm/Dex1 state and torso IMU. Returns immutable observation_id/manifest_path,
+      image paths/hashes, ages and conservative host receive-time skew. sources defaults
+      to [head]; max_age_ms=500, max_skew_ms=100. All requested sources must be fresh
+      and sufficiently aligned. Best-effort receive-time association, not synchronized
+      sensor capture. No detection, depth or calibrated 3D positions. No column-height
+      prerequisite.'
+    input_schema:
+      additionalProperties: false
+      properties:
+        sources:
+          items:
+            enum:
+            - head
+            - left_wrist
+            - right_wrist
+            type: string
+          maxItems: 3
+          minItems: 1
+          title: Sources
+          type: array
+        max_age_ms:
+          default: 500
+          maximum: 1000
+          minimum: 1
+          title: Max Age Ms
+          type: integer
+        max_skew_ms:
+          default: 100
+          maximum: 1000
+          minimum: 1
+          title: Max Skew Ms
+          type: integer
+      title: ObserveRequest
+      type: object
+    output_schema:
+      $defs:
+        ArmOutput:
+          additionalProperties: false
+          properties:
+            positions_rad:
+              additionalProperties:
+                type: number
+              title: Positions Rad
+              type: object
+            references_rad:
+              additionalProperties:
+                type: number
+              title: References Rad
+              type: object
+            age_s:
+              title: Age S
+              type: number
+            phase:
+              title: Phase
+              type: string
+            effective_duration_s:
+              title: Effective Duration S
+              type: number
+            simulated:
+              title: Simulated
+              type: boolean
+            reference_held:
+              title: Reference Held
+              type: boolean
+            torso_rpy_rad:
+              anyOf:
+              - maxItems: 3
+                minItems: 3
+                prefixItems:
+                - type: number
+                - type: number
+                - type: number
+                type: array
+              - type: 'null'
+              default: null
+              title: Torso Rpy Rad
+            torso_age_s:
+              default: -1.0
+              title: Torso Age S
+              type: number
+            elbow_bend_deg:
+              additionalProperties:
+                type: number
+              title: Elbow Bend Deg
+              type: object
+            forearm_world_elevation_deg:
+              additionalProperties:
+                type: number
+              title: Forearm World Elevation Deg
+              type: object
+            requested_elbows:
+              items:
+                $ref: '#/$defs/ElbowTarget'
+              title: Requested Elbows
+              type: array
+            resolved_targets:
+              items:
+                $ref: '#/$defs/JointTarget'
+              title: Resolved Targets
+              type: array
+          required:
+          - positions_rad
+          - references_rad
+          - age_s
+          - phase
+          - effective_duration_s
+          - simulated
+          - reference_held
+          title: ArmOutput
+          type: object
+        ElbowTarget:
+          additionalProperties: false
+          properties:
+            side:
+              enum:
+              - left
+              - right
+              title: Side
+              type: string
+            mode:
+              enum:
+              - upper_arm
+              - world
+              title: Mode
+              type: string
+            angle_deg:
+              maximum: 180
+              minimum: -90
+              title: Angle Deg
+              type: number
+          required:
+          - side
+          - mode
+          - angle_deg
+          title: ElbowTarget
+          type: object
+        JointTarget:
+          additionalProperties: false
+          properties:
+            joint:
+              enum:
+              - left_shoulder_pitch
+              - left_shoulder_roll
+              - left_shoulder_yaw
+              - left_elbow
+              - left_wrist_roll
+              - left_wrist_pitch
+              - left_wrist_yaw
+              - right_shoulder_pitch
+              - right_shoulder_roll
+              - right_shoulder_yaw
+              - right_elbow
+              - right_wrist_roll
+              - right_wrist_pitch
+              - right_wrist_yaw
+              - left_dex1
+              - right_dex1
+              title: Joint
+              type: string
+            position_rad:
+              title: Position Rad
+              type: number
+          required:
+          - joint
+          - position_rad
+          title: JointTarget
+          type: object
+        ObservedImage:
+          additionalProperties: false
+          properties:
+            source:
+              enum:
+              - head
+              - left_wrist
+              - right_wrist
+              title: Source
+              type: string
+            image_path:
+              title: Image Path
+              type: string
+            sha256:
+              title: Sha256
+              type: string
+            sequence:
+              minimum: 1
+              title: Sequence
+              type: integer
+            age_ms:
+              minimum: 0
+              title: Age Ms
+              type: number
+            width:
+              exclusiveMinimum: 0
+              title: Width
+              type: integer
+            height:
+              exclusiveMinimum: 0
+              title: Height
+              type: integer
+            binocular:
+              title: Binocular
+              type: boolean
+            mean_brightness:
+              maximum: 255
+              minimum: 0
+              title: Mean Brightness
+              type: number
+            time_basis:
+              const: adapter_receive_monotonic
+              default: adapter_receive_monotonic
+              title: Time Basis
+              type: string
+            simulated:
+              title: Simulated
+              type: boolean
+            received_monotonic_s:
+              minimum: 0
+              title: Received Monotonic S
+              type: number
+          required:
+          - source
+          - image_path
+          - sha256
+          - sequence
+          - age_ms
+          - width
+          - height
+          - binocular
+          - mean_brightness
+          - simulated
+          - received_monotonic_s
+          title: ObservedImage
+          type: object
+      additionalProperties: false
+      properties:
+        observation_id:
+          title: Observation Id
+          type: string
+        manifest_path:
+          title: Manifest Path
+          type: string
+        collected_at_utc:
+          title: Collected At Utc
+          type: string
+        collected_monotonic_s:
+          minimum: 0
+          title: Collected Monotonic S
+          type: number
+        images:
+          items:
+            $ref: '#/$defs/ObservedImage'
+          title: Images
+          type: array
+        robot_state:
+          $ref: '#/$defs/ArmOutput'
+        state_received_monotonic_s_estimate:
+          minimum: 0
+          title: State Received Monotonic S Estimate
+          type: number
+        state_read_window_ms:
+          minimum: 0
+          title: State Read Window Ms
+          type: number
+        receive_skew_upper_bound_ms:
+          minimum: 0
+          title: Receive Skew Upper Bound Ms
+          type: number
+        association:
+          const: best_effort_receive_time
+          default: best_effort_receive_time
+          title: Association
+          type: string
+        spatial_calibration:
+          const: not_provided
+          default: not_provided
+          title: Spatial Calibration
+          type: string
+        simulated:
+          title: Simulated
+          type: boolean
+        limitations:
+          items:
+            type: string
+          title: Limitations
+          type: array
+      required:
+      - observation_id
+      - manifest_path
+      - collected_at_utc
+      - collected_monotonic_s
+      - images
+      - robot_state
+      - state_received_monotonic_s_estimate
+      - state_read_window_ms
+      - receive_skew_upper_bound_ms
+      - simulated
+      - limitations
+      title: ObserveOutput
+      type: object
+    readiness: []
+    robot_frame_profile:
+      robot_id: g1d
+      base_frame: column_origin
+      tool_frame: column
+      frames: {}
+  providers:
+  - endpoint_id: g1d.state
+    input_id: state_tool_in
+    output_id: state_tool_out
+  - endpoint_id: g1d.cameras
+    input_id: camera_tool_in
+    output_id: camera_tool_out
+  - endpoint_id: g1d.observe
+    input_id: observe_tool_in
+    output_id: observe_tool_out

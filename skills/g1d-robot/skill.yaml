@@ -1,0 +1,61 @@
+manifest_version: 2
+name: g1d-robot
+version: 0.1.20
+description: G1-D state and camera observation with parameterized joint control
+skill_document: SKILL.md
+gateway_url: http://127.0.0.1:19002
+required_tools:
+- g1d.state
+- g1d.camera_snapshot
+- g1d.observe
+- g1d.perception_state
+- g1d.perception_session
+- g1d.arm_state
+- g1d.move_joints
+- g1d.grasp_target
+profiles:
+  mock:
+    dataflow: profiles/mock/dataflow.yaml
+    required_binaries:
+    - gateway
+    - g1d_node
+    required_assets:
+    - assets/cameras.yaml
+    - assets/native/libddsc.so.0
+    - assets/native/libddscxx.so.0
+    - assets/native/libg1d_sdk.so
+    required_environment:
+    - PAOS_G1D_SNAPSHOT_DIR
+    environment: {}
+  real:
+    dataflow: profiles/real/dataflow.yaml
+    required_binaries:
+    - gateway
+    - g1d_node
+    required_assets:
+    - assets/cameras.yaml
+    - assets/native/libddsc.so.0
+    - assets/native/libddscxx.so.0
+    - assets/native/libg1d_sdk.so
+    required_environment:
+    - PAOS_G1D_SNAPSHOT_DIR
+    environment: {}
+artifacts:
+  resolver: local
+  nodes:
+    gateway:
+      artifact_id: gateway-1.0.2-linux-x86_64-tar-gz
+      version: 1.0.2
+      platform: linux
+      arch: x86_64
+      artifact_type: executable_tar_gz
+      entrypoint: gateway
+      sha256: 07584846f16012c6137b10cf743073cd2fe9a7f64564ba2322a7090e66fd3076
+    g1d:
+      artifact_id: g1d-node-0.1.0-745692b2cce32776
+      version: 0.1.0
+      platform: linux
+      arch: x86_64
+      artifact_type: executable_tar_gz
+      entrypoint: g1d_node
+      sha256: 745692b2cce32776e31f3bd5c7435bf09bea310564e7c3d711b4bc56e68997d4

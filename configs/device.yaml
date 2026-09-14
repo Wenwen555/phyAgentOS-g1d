@@ -1,0 +1,36 @@
+# Height uses Point32.y on rt/hispeed_state, in metres in the column's own coordinate.
+# Operator confirmed 2026-09-08: zero at minimum, positive upward, travel 0–0.42 m.
+# Overall heights 1.260–1.680 m are not command coordinates.
+network_interface: enx9c69d36fbc0b
+domain_id: 0
+height:
+  enabled: true
+  limits_confirmed: true
+  min_height_m: 0.0
+  max_height_m: 0.42
+  max_command: 0.15
+  kp: 10.0
+  feedback_timeout_s: 0.3
+  max_duration_s: 30.0
+  settle_s: 0.3
+  stop_timeout_s: 2.0
+  stop_tolerance_m: 0.0005
+# Operator confirmed 2026-09-11 by stepwise open moves on this robot (evidence in
+# dist/dex1-travel-left.json and dist/dex1-travel-right.json). Both grippers are the
+# same hardware, so both sides use the same open target: the right fingers stop at
+# 5.256 rad, and the commandable target sits 0.05 rad below that. NOTE: the left
+# fingers currently stop at 3.356 rad after a grasp — a fault state, not a mechanical
+# limit (the vendor XR teleop mapping constant 5.4 is unreachable there until the left
+# finger parameters are restored). The closed rest positions are the empty-close
+# readings; contact is declared when a closing finger stalls more than
+# contact_margin_rad above its closed rest position.
+dex1:
+  limits_confirmed: true
+  left_max_open_rad: 5.21
+  right_max_open_rad: 5.21
+  left_closed_rest_rad: 0.0254
+  right_closed_rest_rad: 0.0207
+  contact_margin_rad: 0.03
+camera_max_age_s: 1.0
+max_jpeg_bytes: 8388608
+min_brightness: 5.0

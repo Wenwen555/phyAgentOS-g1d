@@ -1,0 +1,24 @@
+{
+  "installed_at_utc": "2026-09-08T05:23:04.237079+00:00",
+  "python": "3.12.14",
+  "core_version": "1.0.0",
+  "core_commit": "b29744a0a72cdb41462c36fe077b6788bb1b35c9",
+  "environment": "environments/core/.venv",
+  "source": "../PhyAgentOS-core",
+  "install_mode": "editable",
+  "uv_version": "0.12.10",
+  "import_checks": [
+    "PhyAgentOS.agent.loop",
+    "PhyAgentOS.providers.litellm_provider",
+    "PhyAgentOS.skill_runtime.manager",
+    "PhyAgentOS.forge.tool_client",
+    "PhyAgentOS.forge.observation"
+  ],
+  "dependency_check": "104 installed packages compatible",
+  "cli_checks": [
+    "paos --help",
+    "paos skill --help"
+  ],
+  "model_request_tested": false,
+  "robot_execution_tested": false
+}
