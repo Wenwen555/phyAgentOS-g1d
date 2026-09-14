@@ -1028,8 +1028,9 @@ tools:
       joints retain their last references. Batch every joint that can move together
       into one request: a single call applies one trajectory and one settling window
       to the whole set, so a whole pose costs one Action instead of a chain of single-joint
-      steps. Visual elbow bend 90 degrees with upper arms down means elbow encoder
-      0; hanging elbow is pi/2. Left wrist roll is rotation about forearm axis. Internal
+      steps. Visual elbow bend 90 degrees means elbow encoder 0 in upper_arm mode,
+      irrespective of shoulder pitch, and does not mean the forearm must stay world-horizontal;
+      a hanging elbow is pi/2. Left wrist roll is rotation about forearm axis. Internal
       left/right Dex1 are motors 31/33: 0 closed; the open target is the operator-confirmed
       finger travel inside the application envelope below, because the vendor mapping
       constant 5.4 can exceed the real finger travel and an unreachable target stalls

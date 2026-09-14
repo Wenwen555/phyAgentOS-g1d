@@ -21,15 +21,11 @@ that same `task_id`. A call without it is rejected, and the rejected round still
 turn. An unbound `g1d.state`/`g1d.arm_state` query is allowed only while resolving the user's target
 before the task exists.
 
-Call `forge_tool_context` once for each tool you will actually invoke, and only for those: it is how
-you learn the live schema, envelope and Endpoint readiness. Do not re-probe a tool already read in
-this task, and do not probe a tool you will not call.
-
-Read state narrowly. `g1d.state` and `g1d.arm_state` take an optional `joints` list and return only
-those axes, so ask for what the current step needs instead of carrying the full 16-joint pose through
-the conversation; `joints: []` on `g1d.state` reads column height alone. Omitting `joints` returns
-everything. Freshness is always checked over the complete pose, so a narrow request can never hide a
-stale joint stream.
+Call `forge_tool_context` once for each `g1d.*` tool before you invoke it, and only for those tools.
+**The returned ToolSpec is the authoritative source** for that tool's parameters, application
+envelopes, tolerances and output semantics; this Skill describes workflow and policy, not the
+mechanics, so never work from memory of them. Do not re-probe a tool already read in this task, and do
+not probe a tool you will not call.
 
 ## Joint motion
 
@@ -37,21 +33,16 @@ stale joint stream.
 accepts `{side: left|right, mode: upper_arm|world, angle_deg}`; the two forms cannot target the same
 elbow in one request.
 
-Batch independent joints into one request. A single `g1d.move_joints` call applies one quintic
-trajectory and one settling window to every joint it lists, so a whole pose is faster to execute and
-easier to verify as one Action than as a chain of single-joint steps; unlisted joints keep their last
-commanded references, so a request only names what changes. The one ordering rule is `world`-mode
-elbows, whose target is solved from the measured shoulder pose and therefore needs the shoulder to
-move in an earlier Action; `upper_arm`-mode elbows do not depend on the shoulder and belong in the
-same request as it. Batching joints into one documented request is not the "single sequence tool"
+Batch every joint that can move together into one request; `g1d.move_joints`'s ToolSpec carries the
+trajectory, settling and shoulder-ordering rules. Batching this way is not the "single sequence tool"
 this Skill forbids: it is still one trajectory under the same validation and feedback checks.
 
-`duration_s` is the requested trajectory time; `timeout_s` includes speed-limited duration,
-0.3-second settling and possible tracking delay — use timeout_s=20.0 for the example below. Check
-live schemas and envelopes; large rotations can take longer than the requested time. The native
-controller keeps publishing after Action completion, so unspecified joints hold their last
-references. One motion at a time across arms and grippers. No Cartesian IK or collision planning is
-provided; do not infer obstacle clearance from this API.
+`duration_s` is the requested trajectory time; `timeout_s` must additionally cover the speed-limited
+duration, the settling window and possible tracking delay — use timeout_s=20.0 for the example below.
+Check live schemas and envelopes; large rotations can take longer than the requested time. The native
+controller keeps publishing after Action completion, so unspecified joints hold their last references.
+One motion at a time across arms and grippers. No Cartesian IK or collision planning is provided; do
+not infer obstacle clearance from this API.
 
 ## General instructions and G1-D joint coordinates
 
@@ -59,10 +50,8 @@ The example below is NOT a mandatory sequence. Follow the CURRENT user instructi
 left arm is requested, do not move the right arm or initialize both arms. Query fresh state first and
 retain pre-action reference/feedback targets for reverse execution. For a forward raise from a
 neutral shoulder, shoulder_pitch is NEGATIVE: raising the left upper arm 30 degrees from neutral
-targets left_shoulder_pitch=-0.5235987755982988 rad. In upper_arm mode, visual elbow bend 90 degrees
-means elbow encoder zero, irrespective of shoulder pitch; it does not mean the forearm must remain
-world-horizontal. A wrist rotation is relative to its starting roll reference unless the user asks
-for an absolute angle.
+targets left_shoulder_pitch=-0.5235987755982988 rad. A wrist rotation is relative to its starting roll
+reference unless the user asks for an absolute angle.
 
 In the original example below, an unqualified rotation means left_wrist_roll and gripper means left
 internal Dex1. For new grasp requests, select left/right from the CURRENT prompt or its explicit
@@ -131,72 +120,40 @@ minimum_association=best_effort with rgb_image/robot_state and only the requeste
 invent authoritative association or action_result/query media kinds — tool results are execution
 facts, not supported evidence media kinds.
 
-Arrival tolerances: all left/right shoulder axes, elbows and Dex1 use 0.15 rad; wrist axes use
-0.08 rad. State them in the task's success criteria. A successful shoulder step permits up to 0.15 rad
-error; it does not claim exact target alignment.
+State the arrival tolerances (shoulders/elbows/Dex1 0.15 rad, wrists 0.08 rad, as the ToolSpec gives
+them) in the task's success criteria; a successful step permits that error and does not claim exact
+target alignment.
 
 ## Explicit elbow coordinate modes
 
 Honor run_arm_agent.py --elbow-mode and optional --elbow-angle-deg over the old example. For forward
-elbow motion use `elbows` and let the runtime convert angles; do not substitute raw encoder targets.
-Default upper_arm mode defines straight=0 deg, bend=90 deg. World mode defines forearm
-longitudinal-axis elevation: down=-90, horizontal=0, up=+90 deg, and reads torso IMU plus all three
-measured shoulder axes including mounting rotations. For world mode move the shoulder first in a
-separate Action and keep base/shoulders still during the elbow motion. The command controls
-inclination to the horizontal plane, not XYZ position, azimuth, or continuous stabilization after
-further shoulder/base motions. Only feasible elbow angles in the commissioned envelope are accepted;
-do not modify other joints to bypass rejection. Ground angles are model/IMU estimates, not
-independent external metrology, and world mode is unavailable when the IMU is stale or missing. Use
-angle feedback in the chosen frame in the success criteria; frame tolerance is the existing elbow
-tolerance, 0.15 rad (8.59 deg). Reverse using the original raw encoder targets, not the forward angle
-override. Wrist rotation remains independent.
+elbow motion use `elbows` and let the runtime convert the angles; do not substitute raw encoder
+targets. The ToolSpec defines both modes and what world mode reads; because its target is solved from
+the measured shoulder pose, move the shoulder in a separate Action first and keep base and shoulders
+still during the elbow motion. The command controls inclination to the horizontal plane, not XYZ
+position, azimuth, or continuous stabilization after further shoulder/base motions. Only feasible
+angles in the commissioned envelope are accepted; do not modify other joints to bypass a rejection.
+Ground angles are model/IMU estimates, not independent external metrology, and world mode is
+unavailable when the IMU is stale or missing. Use angle feedback in the chosen frame in the success
+criteria; frame tolerance is the elbow tolerance, 0.15 rad (8.59 deg). Reverse using the original raw
+encoder targets, not the forward angle override. Wrist rotation remains independent.
 
 ## Combined perception input
 
-`g1d.observe` is available in this same runtime for read-only image + arm-state bundles. Use
-sources=["head"] or the requested wrist sources, max_age_ms=500 and max_skew_ms=100 unless the user
-supplies stricter bounds. Preserve observation_id and use images[].image_path for vision. This
-supplies no detection, depth or camera calibration; do not infer a grasp pose. Host receive-time
-association is best effort, not hardware capture synchronization. All requested sources must be
-fresh; column height is not required, and no motion or additional runtime is needed.
+`g1d.observe` is available in this same runtime for read-only image + arm-state bundles. Preserve
+observation_id and use images[].image_path for vision; do not infer a grasp pose from them. All
+requested sources must be fresh, and no motion or additional runtime is needed.
 
 ## Continuous perception
 
 Use these two tools when the user asks what the robot currently sees, or wants to keep watching over
-several seconds. `g1d.observe` remains the choice for one deliberate snapshot paired with arm state;
-continuous perception is for "right now" and repeated looks.
+several seconds; `g1d.observe` remains the choice for one deliberate snapshot paired with arm state.
+`g1d.perception_session`'s ToolSpec covers `duration_s`, `interval_s` and which cadence to choose;
+`g1d.perception_state`'s covers what a single read returns and how to treat `changed_since_last_read`.
 
-1. Start `g1d.perception_session` with `{sources: ["head"]}` (or the requested wrist sources),
-   `duration_s` (default 30, at most 300) and `interval_s` (default 0.5). It runs in the background,
-   keeps writing the newest camera JPEGs to unique paths, and ends by itself;
-   `forge_tool_cancel_action` stops it earlier if the user asks. No motion is commanded. Choose
-   `interval_s` from the task: 2.0 for an occasional glance, 0.5 to watch a scene or a person,
-   0.1–0.2 while the arm moves or the moment of contact matters: `interval_s` is how often the newest
-   frame that `g1d.perception_state` returns is replaced.
-2. While it runs, and shortly after, call `g1d.perception_state` with `{"max_age_ms": 500}` to read
-   the latest frames. It fails with a stale error when no session ran recently or the stored state is
-   older than `max_age_ms`; that means the view is not current, so start a session again instead of
-   reusing an old path.
-3. Each read returns exactly one frame per requested source — the newest, plus its `age_ms` measured
-   at read time and `changed_since_last_read`. There is no history: the store keeps no earlier frame.
-   `changed_since_last_read: false` means the frame is byte-identical to the one that source returned
-   on your previous successful read, so you have already judged it: skip the vision pass and say you
-   are still watching rather than re-describing it. A first read, a newly watched source and a read
-   after a stale failure all report true. View the frames that changed and the ones you have not
-   seen. When the answer needs the recent past, read again and compare the frames you saw yourself,
-   cycling at `interval_s` or slower; a still is not video, so never describe a continuous
-   trajectory, a speed or a motion direction that the frames you actually viewed do not show.
-4. Look at `frames[].image_path` with the image tool and answer from what you see. Each viewed image
-   is a full vision input, so view the frames that answer the question and no more.
-   `session_active=false` means capture has stopped; the newest paths then stay valid for at most one
-   `interval_s`, so read while the session runs rather than after it ends.
-5. Progress events report `frames_captured` per source; read the final result for totals and `reason`
-   (`duration_elapsed`, `stop_requested`, or a camera failure).
-
-These tools supply native JPEGs only: there is no object detection, tracking, depth, camera
-calibration or 3D object position, and image pixels are not robot target coordinates. Describe what
-is visible and where in the image, and state that no 3D position or grasp pose was measured. Never
-report a detected object ID, a distance, or a coordinate that was not measured.
+Start the session, then read `g1d.perception_state` while it runs. Once `session_active` becomes false
+the newest paths stay valid for at most one `interval_s`, so read while the session runs rather than
+after it ends.
 
 ## User-aligned object grasp (verifier disabled)
 
@@ -217,24 +174,15 @@ human close instruction; otherwise step 2's wait-for-the-user rule always applie
    `{side, operation: "close", duration_s: 1.5, timeout_s: 10.0}` on that task. No
    `before_observation_id` or model approval is needed. `grasp_verify` is disabled and not
    registered; do not call it or recreate its checks with the image tool.
-4. Poll status/result and report mechanical feedback. A succeeded Action means the close reached a
-   verdict. `contact_detected` means the fingers closed while their measured angle was watched and one
-   stalled above the confirmed empty-close rest position; that stall ended the close and the fingers
-   are now held at that angle instead of pressing on towards zero, reported as `blockage_rad`. It is
-   mechanical evidence, not proof that the intended object is held. `fully_closed` means the fingers
-   reached the rest position — the encoder saw nothing in the way, which is inconclusive for a thin or
-   compliant object. Outputs carry `verification_status="disabled"` and `grasp_verified=false`;
-   automatic snapshots and visual verification are not performed, and reading the fingers with a
-   camera when the user asks for it is your own visual judgment, not Action verification.
+4. Poll status/result and report mechanical feedback. The ToolSpec for `g1d.grasp_target` defines what
+   `contact_detected`, `fully_closed` and `blockage_rad` mean and why `verification_status` is
+   `disabled`; a stalled finger is mechanical evidence, not proof that the intended object is held.
 5. Angle management and holding. What is held stays held at the confirmed angle: a detected contact
    is held at the measured stall angle (`blockage_rad`), and no command changes it until the user
-   asks. To let the object go, use `operation:"release"` on that side, never a bare `open`: release
-   opens to the configured travel and then closes again by itself, so the gripper is left at the
-   closed rest position instead of staying open. Release's `timeout_s` must cover both legs; a
-   release whose closing leg meets the object again reports `contact_detected` with `blockage_rad`
-   and the fingers stay at that angle, meaning the object did not leave the fingers. Reopening,
-   reversing or lowering arms, and stopping the runtime all require a user request; an open Action on
-   its own leaves the gripper open.
+   asks. To let the object go use `operation:"release"`, never a bare `open` — the ToolSpec explains
+   what it does and reports; its `timeout_s` must cover both legs. Reopening, reversing or lowering
+   arms, and stopping the runtime all require a user request; an open Action on its own leaves the
+   gripper open.
 
 `g1d.observe`, `g1d.camera_snapshot` and `image` remain independent tools. Use observation or model
 image analysis when the user asks for it; camera/model availability and image confidence are not
