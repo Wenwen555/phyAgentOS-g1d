@@ -345,7 +345,7 @@ def build(skip_binary=False):
             {
                 "manifest_version": 2,
                 "name": name,
-                "version": "0.1.21" if arm else "0.1.1",
+                "version": "0.1.22" if arm else "0.1.1",
                 "description": "G1-D state and camera observation"
                 + (
                     " with parameterized joint control"

@@ -191,109 +191,84 @@ it was disabled.
 
 ## Visual placement-triggered close (wrist judges the object, head judges the fingers, one read closes)
 
-For a prompt that commissions the trigger itself, e.g.
+Applies only to a prompt that commissions the trigger itself, e.g.
 > 抬起左臂和左手肘，然后打开左手夹爪，然后视觉上检测到我把物品放到夹爪中间之后，就自行闭合夹爪
 
-raise, open, watch, close on the Agent's own vision judgment, then confirm what is held. This Gateway
-has no session semantics and no condition or trigger primitive, and the grasp Action performs no image
-check — so the loop is the Agent polling a Query and judging stills, seconds per cycle. Every other
-prompt keeps the human-triggered close above; this section applies only when the user commissions the
-visual trigger. The close's encoder behaviour and the meaning of `contact_detected` / `fully_closed`
-are as stated in the grasp section above.
+Any other prompt keeps the human-triggered close above. This Gateway has no session or condition
+primitive and the grasp Action does no image check, so the trigger is the Agent polling a Query and
+judging stills.
 
-1. Interpret the angles and explain the interpretation. "抬起左臂" = left upper arm forward about 30
-   degrees from neutral: left_shoulder_pitch ≈ -0.5235987755982988 rad. "抬起左手肘" = visual right
-   angle: elbows=[{side:"left", mode:"upper_arm", angle_deg:90}] (elbow encoder 0.0). Ask instead of
-   guessing if the user meant other angles. Do not move the right arm.
-2. Query g1d.arm_state and retain the pre-action references and the current left Dex1 opening for
-   reversal.
-3. Raise the shoulder and the elbow in ONE Action: targets=[{joint:"left_shoulder_pitch",
+1. Explain your reading of the angles, and ask rather than guess if the user meant others:
+   "抬起左臂" → left_shoulder_pitch ≈ -0.5235987755982988; "抬起左手肘" → upper_arm 90 deg (elbow
+   encoder 0.0). Do not move the right arm.
+2. Query `g1d.arm_state`; retain the pre-action references and the left Dex1 opening for reversal.
+3. Raise shoulder and elbow in ONE Action: targets=[{joint:"left_shoulder_pitch",
    position_rad:-0.5235987755982988}], elbows=[{side:"left", mode:"upper_arm", angle_deg:90}],
-   duration_s=3.0, timeout_s=20.0. The elbow is upper_arm mode, so it does not depend on the shoulder
-   pose and needs no separate step; one request means one settling window instead of two. Poll to
-   terminal and confirm both within 0.15 rad before continuing.
-4. Open the left gripper: g1d.grasp_target {side:"left", operation:"open", duration_s:1.5,
-   timeout_s:10.0}, poll to terminal (mechanical_outcome=opened). The open target is the
-   operator-confirmed finger travel from device.yaml, advertised as the application envelope of
-   move_joints; never substitute the vendor 5.4 mapping constant, and never command a Dex1 angle
-   outside that envelope.
-5. Start the watch on both cameras and split the criteria between them. Each camera answers the
-   question it can actually answer at this raised pose, and neither answers the other's:
-   g1d.perception_session {sources:["left_wrist","head"], duration_s:300, interval_s:0.5}, submitted
-   with timeout_ms=330000 — this profile's maximum invoke timeout. A smaller timeout_ms caps the
-   session below duration_s, and a timeout_ms equal to duration_s puts the session end and the
-   Gateway deadline in the same tick, where the invocation can be marked unknown and the final result
-   dropped. The wrist frame at close range decides the OBJECT — which object it is and whether it has
-   arrived at the jaws. The head frame decides the FINGERS as seen from outside — that they are open,
-   that the object is between them, and that no human hand is in or near the gripper.
+   duration_s=3.0, timeout_s=20.0. Poll to terminal and confirm both within 0.15 rad.
+4. Open the left gripper: `g1d.grasp_target` {side:"left", operation:"open", duration_s:1.5,
+   timeout_s:10.0}, poll to terminal (`mechanical_outcome=opened`). Never substitute the vendor 5.4
+   mapping constant and never command a Dex1 angle outside the ToolSpec envelope.
+5. Start the watch: `g1d.perception_session` {sources:["left_wrist","head"], duration_s:300,
+   interval_s:0.5}, submitted with timeout_ms=330000. A smaller timeout_ms caps the session below
+   `duration_s`; an equal one puts session end and Gateway deadline in the same tick, where the
+   invocation can be marked unknown and the final result dropped.
+   - wrist frame → the OBJECT: which object it is, and whether it has arrived at the jaws;
+   - head frame → the FINGERS: open, object between them, no human hand in or near the gripper.
 
-   Two properties of the wrist camera hold at every pose. They are the fastest way to tell a misread
-   image from an unusable view, and both were measured on real frames from this robot:
-
-   - The black gripper fingers are always present in the wrist frame, normally in the lower-left and
-     lower-right and converging toward the middle. If you are about to answer that they are not
-     visible, look at those two corners again first. Confirmed at forearm elevation ≈ 0 deg (the
-     fingers flank the object) and ≈ −44 deg (the fingers fill the middle, pointing at the lens).
-   - `forearm_world_elevation_deg` from `g1d.arm_state` predicts what the frame must contain: a
-     forearm clearly downward puts the camera on the floor and any hand-level object out of the
-     frame, while a near-horizontal forearm puts it on whatever sits in front of the hand. Read this
-     value before judging, and name the regime you are in.
-6. Verify visibility before trusting anything: read g1d.perception_state and view both frames,
-   deciding whether each can serve its role above. The open fingers must actually be visible in the
-   head frame; the wrist frame must at least show the jaw area the object will arrive at. If one of
-   the two cannot serve its role the split criterion cannot be evaluated — cancel the session, report
-   that visual placement detection is unavailable in this pose and say which view failed, and wait
-   for the user's close instruction. Never close blind, and never close merely because time passed.
-7. Then the loop. Each cycle: g1d.perception_state {max_age_ms:1000} — the contract maximum, because
-   the store is written once per interval_s plus loop time, so a tighter bound turns ordinary jitter
-   into a stale failure. Check session_active, and view the newest frame of each source it returns
-   (there is no history to pick from). A frame whose `changed_since_last_read` is false is
-   byte-identical to the one you already judged for that source: keep watching without spending a
-   vision pass on it. Judge the two views separately and name the view you saw each thing in:
-   - head frame → the fingers: open, visible, nothing else between them, no human hand in or near
-     the gripper;
+   Two wrist-camera properties hold at every pose:
+   - the black fingers are always present in the wrist frame, in the lower-left and lower-right,
+     converging toward the middle. If you are about to answer that they are not visible, look at
+     those two corners again first;
+   - `forearm_world_elevation_deg` from `g1d.arm_state` predicts the frame's content: a forearm
+     clearly downward puts the camera on the floor with any hand-level object out of frame, a
+     near-horizontal forearm puts it on whatever sits in front of the hand. Read it before judging,
+     and name the regime you are in.
+6. Verify both views can serve their roles before trusting them: the head frame must actually show the
+   open fingers, the wrist frame at least the jaw area. If either cannot, cancel the session, report
+   which view failed and that visual placement detection is unavailable in this pose, and wait for the
+   user's close instruction. Never close blind, and never close because time passed.
+7. Loop. Each cycle: `g1d.perception_state` {max_age_ms:1000} — the contract maximum, because the store
+   is written once per `interval_s` plus loop time and a tighter bound turns ordinary jitter into a
+   stale failure. Check `session_active` and view the newest frame of each source it returns; there is
+   no history to pick from. Skip any frame whose `changed_since_last_read` is false: it is
+   byte-identical to one you already judged. Judge the two views separately and name the view you saw
+   each thing in:
+   - head frame → the fingers: open, visible, nothing else between them, no human hand in or near;
    - wrist frame → the object: the intended object itself, at close range at the jaws.
-   Neither view decides alone: at this raised pose the object can be too small or too pale to identify
-   from the head frame, which is exactly why the wrist frame judges it, while the wrist frame shows
-   the fingers only where they flank the jaws and cannot show whether a human hand is nearby. Single
-   stills: never describe a trajectory, a speed or a direction the
+   Neither view decides alone. Single stills: never describe a trajectory, a speed or a direction the
    frames do not show.
 8. Close as soon as both halves hold in ONE read — the wrist frame showing the intended object at the
-   jaws and the head frame showing the open fingers around/at it with no human hand — with that
-   confirming read immediately preceding g1d.grasp_target {side:"left", operation:"close",
-   duration_s:1.5, timeout_s:10.0}. A single view is not a confirmation: if the wrist frame does not
-   show the object at the jaws, or the head frame does not show the fingers or does show a hand, keep
+   jaws and the head frame showing the open fingers around it with no human hand — with that
+   confirming read immediately preceding `g1d.grasp_target` {side:"left", operation:"close",
+   duration_s:1.5, timeout_s:10.0}. A single view is not a confirmation: if either half fails, keep
    watching and re-read. Do not wait for a second confirmation cycle, and do not close on a still you
-   did not just read (`age_ms` bounds how old the frames are; never reuse an old image path). If
-   either camera stops serving its role and stays that way, cancel the session, report which view
-   failed and what you last saw, and fall back to the user's close instruction. If the session ended,
-   restart it and repeat step 6 before judging again.
+   did not just read (`age_ms` bounds how old the frames are; never reuse an old image path). If a
+   camera stops serving its role and stays that way, cancel the session, report which view failed and
+   what you last saw, and fall back to the user's close instruction. If the session ended, restart it
+   and repeat step 6 before judging again.
 9. Each cycle costs tool calls (the query, then one view per source that changed) against the turn's
-   bounded tool-iteration budget. Keep the setup lean, do not re-query arm_state every cycle, and do
+   bounded tool-iteration budget. Keep the setup lean, do not re-query `arm_state` every cycle, and do
    not view a frame that adds nothing. If the budget runs out before the object arrives, stop, report
    how long you watched, and fall back to the user's close instruction.
-10. Double check what is held before claiming anything, applying the same split: the wrist snapshot
-    g1d.camera_snapshot {source:"left_wrist", max_age_ms:1000} answers what is held (which object, at
-    close range between the jaws), and g1d.camera_snapshot {source:"head", max_age_ms:1000} answers
-    whether the fingers are around it. Report which view each part of the answer came from; if a view
-    cannot answer its part, say so instead of guessing from the other one.
-    - `contact_detected` and the intended object is visibly between the fingers: report that the
-      fingers stalled on the object and are held at the stall angle (`blockage_rad`). That stall
-      angle is the confirmed grasp angle; hold it and do not command the gripper again until the user
-      asks.
+10. Before claiming anything, re-check what is held with the same split: `g1d.camera_snapshot`
+    {source:"left_wrist", max_age_ms:1000} answers what is held, and {source:"head"} whether the
+    fingers are around it. Report which view each part of the answer came from; if a view cannot
+    answer its part, say so rather than guessing from the other one.
+    - `contact_detected` with the intended object visibly between the fingers: report the stall angle
+      (`blockage_rad`) as the confirmed grasp angle; hold it and do not command the gripper again
+      until the user asks.
     - `fully_closed` while an object was expected: thin or compliant objects can still be in the
-      fingers. If the object is visibly held, report it as held but not encoder-detected; if the
-      fingers are empty, report the empty close plainly.
-    - Hand, wrong object, or nothing held: release with g1d.grasp_target {side:"left",
-      operation:"release", duration_s:1.5, timeout_s:10.0}, report exactly what you saw, and never
-      claim a grasp. Use release rather than a bare open, so the gripper does not stay open.
-11. This check is your own vision judgment, not the disabled Action verifier:
+      fingers. Report it as held but not encoder-detected if it is visibly held, and report the empty
+      close plainly if the fingers are empty.
+    - Hand, wrong object, or nothing held: release with `g1d.grasp_target` {side:"left",
+      operation:"release", duration_s:1.5, timeout_s:10.0}, report exactly what you saw, never claim a
+      grasp, and never leave the gripper open.
+11. This is your own vision judgment, not the disabled Action verifier:
     `verification_status="disabled"` and `grasp_verified=false` describe the Action, not your
-    judgment, and each half came from a still of a single view. On any doubt, or if the user says stop
-    or pulls back, cancel the close invocation first and report the uncertainty rather than closing.
-    Cancel the session before finalizing — forge_task_finalize refuses while a task-owned Action is
-    non-terminal; cancelling stops capture only, and the arm keeps holding the confirmed angle.
-12. After the grasp the fingers stay at the confirmed angle until the next commanded Action, so the
-    grasp is not disturbed by anything you do afterwards. To let the object go — at the user's request
-    or to undo a wrong grasp — use `operation:"release"` on that side, as described in the grasp
+    judgment, and each half came from a single-view still. On any doubt, or if the user says stop or
+    pulls back, cancel the close invocation first and report the uncertainty rather than closing.
+    Cancel the session before finalizing — `forge_task_finalize` refuses while a task-owned Action is
+    non-terminal, and cancelling stops capture only, leaving the arm holding the confirmed angle.
+12. The fingers hold the confirmed angle until the next commanded Action. To let the object go — at the
+    user's request or to undo a wrong grasp — use `operation:"release"`, as described in the grasp
     section.
